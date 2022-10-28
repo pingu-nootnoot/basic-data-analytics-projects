@@ -1,0 +1,96 @@
+---
+title: "A1-5-AccessingData"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question  
+
+In this exercise you will locate and access data from interesting data sources. They could be APIs to popular websites (like IMDB), packages that give you access to significant government databases (like OECD data), packages that give access to important scientific datasets (eg rOpenSci.org) or web links links to messy data that you will clean up and make available. 
+
+In this exercise please find three data such as : "iris", "USArrests", "mtcars" sources of interest to you, and download some data from the data source. Make it accessible as an R data frame, and describe the data frame. Do each in a separate R code chunk. 
+
+
+1. OECD Key Short-Term Economic Indicators: Consumer Prices - Annual inflation. Country: Australia, frequency: annual.
+```{r}
+# Write your code and your comments here.
+library(OECD)
+library(ggplot2)
+
+kei <- get_dataset("KEI",
+                  filter = "CP+CPALTT01.AUS.GP+GY.A", 
+                  pre_formatted = TRUE)
+
+kei$ObsValue <- as.numeric(as.character(kei$ObsValue))
+kei$Time <- as.numeric(as.character(kei$Time))
+# Head and tail of the dataset 
+head(kei)
+tail(kei)
+# Summary
+summary(kei)
+# Shape
+print(paste("The KEI dataset has", nrow(kei), "rows and", ncol(kei), "columns."))
+# Name of the columns
+colnames(kei)
+# Classes of columns
+lapply(kei,class)
+# Plot of ObsValue to Year
+ggplot(kei, aes(Time, ObsValue)) + geom_point()
+
+```
+```{r}
+
+```
+2. NASA DONKI Solar Flare (FLR) API: date range 2022-01-01 to 2022-04-28
+```{r}
+library(jsonlite)
+library(tibble)
+
+file <- stream_in(file("https://api.nasa.gov/DONKI/FLR?startDate=2022-01-01&endDate=2022-04-28&api_key=kDcnhIckbJITVSsaeA0djAXxYEgfChnwHEAR6DtR"))
+flr <- file[c(1,3,4,5,6,7,8,10)]
+flr$flrID <- as.Date(as.character(flr$flrID))
+# Head of the dataset
+head(flr)
+# Summary
+summary(flr)
+# Shape
+print(paste("The flr dataset has", nrow(flr), "rows and", ncol(flr), "columns."))
+# Name of the columns
+colnames(flr)
+# Classes of columns
+lapply(flr,class)
+# Plot flares in each date
+library(dplyr)
+flr_daily <- flr %>% count(flrID)
+plot(as.Date(flr_daily$flrID), flr_daily$n, type="l", xlab="Time", ylab="Flare observations")
+
+```
+```{r}
+
+```
+3. COVID-19 cumulative cases in U.S.
+```{r}
+library(RCurl)
+txtData = getURL("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-states.csv")
+covid = read.table(text = txtData, sep=",", header=TRUE)
+# Head of the dataset
+head(covid,10)
+# Summary
+summary(covid)
+# Shape
+print(paste("The covid dataset has", nrow(covid), "rows and", ncol(covid), "columns."))
+# Name of the columns
+colnames(covid)
+# Classes of columns
+lapply(covid,class)
+# Aggregate daily cumulative cases in all states and plot
+totalCovid = aggregate(covid$cases, by=list(date=covid$date), FUN=sum)
+plot(as.Date(totalCovid$date), totalCovid$x, type="l", xlab="Time", ylab="Cumulative cases")
+```
+```{r}
+
+```
+
