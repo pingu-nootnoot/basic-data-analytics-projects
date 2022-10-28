@@ -1,0 +1,212 @@
+---
+title: "Assessment 2"
+author: "14088355 Yiyan Gao"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## New York Air Quality Measurements Exploratory Data Analysis and Linear Regression Model
+
+```{r}
+library(dplyr)
+library(gridExtra)
+library(ROCR)
+library(tidyverse)
+library(caret)
+library(moments)
+```
+1. Check the first rows of the dataset
+
+1.1 Load data
+```{r}
+data(airquality)
+```
+
+1.2 Check the dimension of the dataset
+```{r}
+dim(airquality)
+```
+
+1.3 Show first few rows of the dataset
+```{r}
+head(airquality)
+```
+
+1.4 Check the type of the data in each column
+```{r}
+sapply(airquality, class)
+```
+
+2. Missing value handling and data cleaning
+
+2.1 Check if the data is clean, that means it is not missing any values
+
+2.1.1 Check duplicated rows
+```{r}
+sum(duplicated(airquality))
+```
+
+2.1.2 Check values that are na
+```{r}
+sum(!complete.cases(airquality))
+```
+
+2.1.3 Check the numnber of na values in each column
+```{r}
+sapply(airquality, function(x) sum(is.na(x)))
+```
+
+2.2 Remove rows with missing values
+```{r}
+df <- na.omit(airquality)
+```
+
+Show that there is no null values
+```{r}
+sum(!complete.cases(df))
+```
+
+2.3 Change Month and Day to factor variables
+```{r}
+df$Month <- factor(df$Month, levels=5:9, labels=month.abb[5:9], ordered=TRUE)
+df$Day <- factor(df$Day, levels=c(1:31), ordered=TRUE)
+```
+
+3. Explorative Data Analysis
+
+3.1 Describe the dataset
+
+3.1.1 Dimension of the dataset
+```{r}
+dim(df)
+```
+
+3.1.2 Summary of the dataset
+```{r}
+summary(df)
+```
+
+3.2 Distribution of Ozone
+
+3.2.1 Histogram of Ozone
+```{r}
+ggplot(data=df, aes(x=Ozone)) +
+  geom_histogram(fill="steelblue", color="black") +
+  ggtitle("Histogram of Ozone")
+```
+
+3.2.2 Check the skewness
+```{r}
+skewness(df$Ozone, na.rm = T)
+```
+
+3.2.3 Check the kurtosis
+```{r}
+kurtosis(df$Ozone, na.rm=T)
+```
+
+3.24 Scale Ozone for more symmetric distribution
+```{r}
+df$Ozone.S <- sqrt(df$Ozone)
+ggplot(data=df, aes(x=Ozone.S)) +
+  geom_histogram(fill="steelblue", color="black") +
+  ggtitle("Histogram of Ozone.S")
+```
+
+3.3 Plot each attribute against Ozone
+```{r}
+p1 <- ggplot(df, aes(x=Solar.R, y=Ozone.S)) + geom_point()
+p2 <- ggplot(df, aes(x=Wind, y=Ozone.S)) + geom_point()
+p3 <- ggplot(df, aes(x=Temp, y=Ozone.S)) + geom_point()
+p4 <- ggplot(df, aes(x=Month, y=Ozone.S)) + geom_boxplot()
+p5 <- ggplot(df, aes(x=Day, y=Ozone.S)) + geom_boxplot()
+grid.arrange(p1, p2, p3, p4, p5, nrow = 3)
+```
+
+3.4 Pair plot for all numeric variables
+```{r}
+pairs(df, panel = panel.smooth, main = "airquality data")
+```
+
+3.5 Check the correlations between variables
+```{r}
+# Choose the numerical columns
+columns <- c('Ozone.S', 'Solar.R', 'Wind', 'Temp')
+round(cor(df[, columns]), 2)
+```
+
+Ozone is moderately correlated with Solar.R, strongly correlated with Wind,
+strongly correlated to Temperature.
+Solar.R is weakly correlated with Wind and Temp.
+Wind is moderately correlated to Temp.
+
+4. Train a linear regression model and evaluate the model
+
+4.1 Train the model
+```{r}
+set.seed(0)
+training.samples <- df$Ozone.S %>%
+  createDataPartition(p = 0.8, list = FALSE)
+train.data  <- df[training.samples, ]
+test.data <- df[-training.samples, ]
+
+model <- lm(Ozone.S ~., data = train.data)
+summary(model)
+saveRDS(model, "model.rds")
+```
+
+4.2 Evaluation of th model
+```{r}
+predictions <- model %>% predict(test.data)
+RMSE(predictions, test.data$Ozone.S)
+R2(predictions, test.data$Ozone.S)
+```
+
+5. Develop a Shiny application to predict the Ozone level
+```{r}
+library(shiny)
+ui<- fluidPage(
+titlePanel(title=" Air Quality Prediction "),
+sidebarLayout(
+sidebarPanel(
+  sliderInput('solar', 'Solar Radiation', min=7, max=334, value=7, step=1, round=0),
+  sliderInput('wind', 'Wind', min=2, max=21, value=2, step=1, round=0),
+  sliderInput('temp', 'Temperature', min=55, max=100, value=55, step=1, round=0),
+  selectInput('month', 'Month', c('May', 'Jun', 'Jul', 'Aug', 'Sep')),
+  selectInput('day', 'Day', c(1:31)),
+),
+mainPanel(
+  h3(textOutput('title')),
+  verbatimTextOutput('result')
+))
+)
+
+server<- function (input, output){
+  data <- reactive({
+    data.frame(Solar.R=input$solar,
+               Wind=input$wind,
+               Temp=input$temp,
+               Month=input$month,
+               Day=input$day,
+               Ozone=0
+               )
+  })
+  
+  prediction <- reactive({
+    predict(model, newdata = data())
+  })
+  
+  t <- "Predicted Air Quality - Square Root of Ozone Level:"
+  
+  output$title <- renderText(t)
+
+  output$result <- renderText(prediction())
+}
+
+shinyApp (ui = ui , server = server )
+```
+
+
